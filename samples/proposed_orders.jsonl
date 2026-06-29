@@ -1,0 +1,3 @@
+{"client_order_id": "ord-ok", "symbol": "BTCUSDT", "side": "buy", "quantity": "0.01", "reference_price": "1000", "stop_loss_price": "990", "submitted_at": "2024-01-01T12:00:00.000Z"}
+{"client_order_id": "ord-no-stop", "symbol": "BTCUSDT", "side": "buy", "quantity": "0.01", "reference_price": "1000", "submitted_at": "2024-01-01T12:00:01.000Z"}
+{"client_order_id": "ord-too-large", "symbol": "BTCUSDT", "side": "buy", "quantity": "2", "reference_price": "1000", "stop_loss_price": "990", "submitted_at": "2024-01-01T12:00:02.000Z"}

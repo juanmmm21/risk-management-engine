@@ -1,0 +1,10 @@
+{
+  "symbol": "BTCUSDT",
+  "cash": "9500",
+  "equity": "10000",
+  "position_quantity": "0",
+  "average_entry_price": "0",
+  "daily_realized_pnl": "0",
+  "peak_equity_today": "10000",
+  "snapshot_time": "2024-01-01T12:00:00.000Z"
+}
