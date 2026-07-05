@@ -1,20 +1,20 @@
 # risk-management-engine
 
-Escudo de seguridad pre-trade que **intercepta órdenes** antes de enviarlas al mercado y verifica reglas matemáticas estrictas: tamaño de posición, stop-loss obligatorio y pérdida máxima diaria (*max drawdown*). Noveno módulo del ecosistema [quant-core-infra](https://github.com/juanmmm21/quant-core-infra).
+Pre-trade safety shield that **intercepts orders** before sending them to the market and verifies strict mathematical rules: position size, mandatory stop-loss, and maximum daily loss (*max drawdown*). Ninth module of the [quant-core-infra](https://github.com/juanmmm21/quant-core-infra) ecosystem.
 
-Repositorio: [github.com/juanmmm21/risk-management-engine](https://github.com/juanmmm21/risk-management-engine)
-
----
-
-## Qué es y qué problema resuelve
-
-Un bot de trading puede generar señales válidas técnicamente pero **peligrosas** en términos de capital: órdenes demasiado grandes, entradas sin stop-loss o operaciones durante un drawdown diario crítico.
-
-Este módulo actúa como **filtro determinista** entre la lógica de estrategia y `order-routing-gateway`. Ninguna orden llega al exchange sin pasar por el motor de riesgo.
+Repository: [github.com/juanmmm21/risk-management-engine](https://github.com/juanmmm21/risk-management-engine)
 
 ---
 
-## Rol en quant-core-infra
+## What it is and what problem it solves
+
+A trading bot can generate signals that are technically valid but **dangerous** in terms of capital: orders that are too large, entries without a stop-loss, or trades during a critical daily drawdown.
+
+This module acts as a **deterministic filter** between strategy logic and `order-routing-gateway`. No order reaches the exchange without passing through the risk engine.
+
+---
+
+## Role in quant-core-infra
 
 ```text
 alpha-signal-generator ──► event-driven-backtester ──► ProposedOrder
@@ -29,39 +29,39 @@ alpha-signal-generator ──► event-driven-backtester ──► ProposedOrder
                                                    trade-audit-logger
 ```
 
-Se sitúa **antes** del enrutamiento y **después** de la generación de órdenes.
+It sits **before** routing and **after** order generation.
 
 ---
 
-## Objetivo
+## Purpose
 
-Demuestra:
+Demonstrates:
 
-- Motor de reglas pre-trade extensible mediante `RiskRule`
-- Validación de position sizing con `Decimal`
-- Stop-loss obligatorio en entradas nuevas
-- Bloqueo por max drawdown diario
-- Pipelines JSONL para órdenes propuestas y snapshot de cartera
+- Pre-trade rule engine extensible via `RiskRule`
+- Position sizing validation with `Decimal`
+- Mandatory stop-loss on new entries
+- Blocking on maximum daily drawdown
+- JSONL pipelines for proposed orders and portfolio snapshots
 
 ---
 
-## Reglas implementadas
+## Implemented rules
 
 ### Position sizing (`position_sizing`)
 
-| Check | Condición de rechazo |
+| Check | Rejection condition |
 |-------|---------------------|
-| Notional por orden | `quantity × price > equity × max_order_notional_pct` |
-| Notional de posición | `(pos + qty) × price > equity × max_position_notional_pct` |
-| Capital disponible | `notional > cash` en compras |
+| Notional per order | `quantity × price > equity × max_order_notional_pct` |
+| Position notional | `(pos + qty) × price > equity × max_position_notional_pct` |
+| Available capital | `notional > cash` on buys |
 
 ### Stop-loss (`stop_loss`)
 
-| Check | Condición de rechazo |
+| Check | Rejection condition |
 |-------|---------------------|
-| Stop obligatorio | Entrada long nueva sin `stop_loss_price` |
-| Stop válido | `stop_loss >= reference_price` en long |
-| Distancia mínima | `(price - stop) / price < min_stop_loss_distance_pct` |
+| Mandatory stop | New long entry without `stop_loss_price` |
+| Valid stop | `stop_loss >= reference_price` on longs |
+| Minimum distance | `(price - stop) / price < min_stop_loss_distance_pct` |
 
 ### Drawdown (`drawdown`)
 
@@ -69,20 +69,20 @@ Demuestra:
 drawdown_pct = (peak_equity_today - equity) / peak_equity_today
 ```
 
-Si `drawdown_pct >= max_daily_drawdown_pct` → bloquea **nuevas compras**. Las ventas (reducción de riesgo) siguen permitidas.
+If `drawdown_pct >= max_daily_drawdown_pct` → blocks **new buys**. Sells (risk reduction) are still allowed.
 
 ---
 
-## Cómo funciona
+## How it works
 
-1. **Snapshot de cartera:** cash, equity, posición abierta, PnL diario y pico del día.
-2. **Orden propuesta:** cantidad, precio de referencia y stop-loss opcional.
-3. **Evaluación:** cada regla devuelve `RiskViolation` o lista vacía.
-4. **Veredicto:** `approved` sin violaciones; `rejected` con al menos una.
+1. **Portfolio snapshot:** cash, equity, open position, daily PnL, and the day's peak.
+2. **Proposed order:** quantity, reference price, and optional stop-loss.
+3. **Evaluation:** each rule returns a `RiskViolation` or an empty list.
+4. **Verdict:** `approved` with no violations; `rejected` with at least one.
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```text
 ProposedOrder + PortfolioSnapshot
@@ -99,38 +99,38 @@ Drawdown  Position   StopLoss
        RiskCheckResult
 ```
 
-### Componentes
+### Components
 
-| Módulo | Responsabilidad |
+| Module | Responsibility |
 |--------|----------------|
-| `rules/position_sizing.py` | Límites de notional y capital |
-| `rules/stop_loss.py` | Validación de stop en entradas |
-| `rules/drawdown.py` | Bloqueo por drawdown diario |
-| `engine.py` | Orquestación de reglas |
-| `ingest.py` | Parsing JSON/JSONL |
-| `pipeline.py` | Run end-to-end |
+| `rules/position_sizing.py` | Notional and capital limits |
+| `rules/stop_loss.py` | Stop validation on entries |
+| `rules/drawdown.py` | Daily drawdown blocking |
+| `engine.py` | Rule orchestration |
+| `ingest.py` | JSON/JSONL parsing |
+| `pipeline.py` | End-to-end run |
 
 ---
 
-## Configuración: `RiskLimitsConfig`
+## Configuration: `RiskLimitsConfig`
 
-| Parámetro | Default | Descripción |
+| Parameter | Default | Description |
 |-----------|---------|-------------|
-| `max_position_notional_pct` | `0.25` | Máximo 25% del equity en posición |
-| `max_order_notional_pct` | `0.10` | Máximo 10% del equity por orden |
-| `max_daily_drawdown_pct` | `0.05` | Drawdown diario máximo 5% |
-| `require_stop_loss_on_entry` | `true` | Stop obligatorio en entradas long |
-| `min_stop_loss_distance_pct` | `0.005` | Distancia mínima del stop (0.5%) |
+| `max_position_notional_pct` | `0.25` | Max 25% of equity in position |
+| `max_order_notional_pct` | `0.10` | Max 10% of equity per order |
+| `max_daily_drawdown_pct` | `0.05` | Max daily drawdown 5% |
+| `require_stop_loss_on_entry` | `true` | Mandatory stop on long entries |
+| `min_stop_loss_distance_pct` | `0.005` | Minimum stop distance (0.5%) |
 
 ---
 
-## Requisitos
+## Requirements
 
 - Python **3.11+**
 
 ---
 
-## Instalación
+## Installation
 
 ```bash
 cd risk-management-engine
@@ -141,7 +141,7 @@ pip install -e ".[dev]"
 
 ---
 
-## Uso CLI
+## CLI usage
 
 ```bash
 risk-management-engine check \
@@ -152,7 +152,7 @@ risk-management-engine check \
   --output risk_results.json
 ```
 
-### Salida esperada (extracto)
+### Expected output (excerpt)
 
 ```json
 {
@@ -170,9 +170,9 @@ risk-management-engine check \
 
 ---
 
-## Formatos de entrada
+## Input formats
 
-### Orden propuesta (JSONL)
+### Proposed order (JSONL)
 
 ```json
 {
@@ -186,7 +186,7 @@ risk-management-engine check \
 }
 ```
 
-### Snapshot de cartera (JSON)
+### Portfolio snapshot (JSON)
 
 ```json
 {
@@ -203,7 +203,7 @@ risk-management-engine check \
 
 ---
 
-## Uso programático
+## Programmatic usage
 
 ```python
 from datetime import UTC, datetime
@@ -230,7 +230,7 @@ check = engine.check_order(order, portfolio)
 
 ---
 
-## Desarrollo
+## Development
 
 ```bash
 pytest -q
@@ -242,23 +242,23 @@ mypy src
 
 ## Troubleshooting
 
-| Síntoma | Causa probable | Solución |
+| Symptom | Likely cause | Solution |
 |---------|----------------|----------|
-| Todas las órdenes rechazadas por drawdown | `equity` muy por debajo de `peak_equity_today` | Actualiza el snapshot o ajusta `max_daily_drawdown_pct` |
-| `flat position must have zero average_entry_price` | Posición cero con precio medio distinto de 0 | Pon `average_entry_price: "0"` cuando `position_quantity` es 0 |
-| `order symbol must match portfolio` | Símbolos distintos | Alinea `--symbol` y campos `symbol` en ambos archivos |
+| All orders rejected for drawdown | `equity` far below `peak_equity_today` | Update the snapshot or adjust `max_daily_drawdown_pct` |
+| `flat position must have zero average_entry_price` | Zero position with a non-zero average price | Set `average_entry_price: "0"` when `position_quantity` is 0 |
+| `order symbol must match portfolio` | Mismatched symbols | Align `--symbol` and the `symbol` fields in both files |
 
 ---
 
 ## Roadmap
 
-- [ ] Reglas de exposición multi-símbolo y correlación
-- [ ] Trailing stop y take-profit como validaciones adicionales
-- [ ] Integración en línea con `order-routing-gateway` como middleware
-- [ ] Persistencia de violaciones en `trade-audit-logger`
+- [ ] Multi-symbol exposure and correlation rules
+- [ ] Trailing stop and take-profit as additional validations
+- [ ] Inline integration with `order-routing-gateway` as middleware
+- [ ] Persisting violations in `trade-audit-logger`
 
 ---
 
-## Licencia
+## License
 
 MIT
