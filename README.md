@@ -73,6 +73,49 @@ If `drawdown_pct >= max_daily_drawdown_pct` → blocks **new buys**. Sells (risk
 
 ---
 
+## Portfolio risk (v0.2.0)
+
+Per-order rules cannot see that a BTC long and an ETH long are mostly the same bet. The
+`portfolio_risk` module looks at the whole book:
+
+| Measure | Method |
+|---------|--------|
+| **Historical VaR / CVaR** | empirical (1 − c) quantile of portfolio returns (lower order statistic, conservative) and the mean of the tail at or below it |
+| **Parametric VaR / CVaR** | normal with the portfolio mean and `sqrt(wᵀ Σ w)`; CVaR = −(μ − σ φ(z) / (1 − c)) |
+| **Correlations** | Pearson matrix on aligned returns; assets with ρ ≥ threshold form a **correlated group** |
+| **VaR backtest** | rolling one-step-ahead VaR, exceedance count and Kupiec proportion-of-failures test |
+
+Pre-trade limits are checked on the **pro-forma** portfolio (after the order): gross and net
+exposure, exposure per asset, exposure per correlated group, VaR and CVaR, plus a minimum return
+history. An order that lowers both gross exposure and VaR is always approved, so the gate never
+blocks the way out of a breach.
+
+```bash
+risk-management-engine portfolio-var --prices prices.json --positions positions.json \
+  --confidence 0.99 --backtest-window 250
+risk-management-engine check-portfolio --order order.json --prices prices.json \
+  --positions positions.json --max-correlated-exposure-pct 0.75 --max-var-pct 0.05
+```
+
+`prices.json`: `{"BTCUSDT": [["2026-01-01T00:00:00Z", "93000.1"], ...]}`;
+`positions.json`: `{"equity": "10000", "notionals": {"BTCUSDT": "4000", "ETHUSDT": "-1000"}}`.
+
+### Measured on real data (2026-11-17)
+
+Binance daily closes from `data-api.binance.vision`, 2024-11-17 → 2026-11-16 (729 daily returns),
+portfolio 40 % BTC, 20 % ETH, 10 % SOL, 10 % BNB of 10,000 USDT, 4-vCPU Linux x86_64:
+
+| 1-day, 99 % | Historical | Parametric |
+|-------------|-----------|------------|
+| VaR | 5.88 % (588 USDT) | 4.93 % (493 USDT) |
+| CVaR | 7.72 % | 5.65 % |
+| Backtest (479 days, window 250) | 4 exceedances vs 4.79 expected, Kupiec p = 0.71 | 6 vs 4.79, p = 0.59 |
+
+Pairwise correlations were 0.70–0.84 (BTC–ETH 0.84), so with a 0.7 threshold all four assets
+form one correlated group. Past VaR is a statistic of the past, not a bound on future losses.
+
+---
+
 ## How it works
 
 1. **Portfolio snapshot:** cash, equity, open position, daily PnL, and the day's peak.
